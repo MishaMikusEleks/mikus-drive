@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="My Google">
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#0078d4"/>
+  <rect x="5" y="7" width="22" height="18" rx="2.5" fill="#fff"/>
+  <rect x="5" y="7" width="22" height="6" rx="2.5" fill="#e8f3fc"/>
+  <path fill="#fbbc04" d="M8 15h6.5l1.5 1.5h9v1.5H8z"/>
+  <path fill="#34a853" d="M8 18.5h17v6.5H8z"/>
+  <path fill="#4285f4" d="M8 18.5h8.5v6.5H8z"/>
+  <path fill="#ea4335" d="M16.5 18.5h8.5v6.5h-8.5z"/>
+  <circle cx="22.5" cy="22" r="3.5" fill="#fff" stroke="#0078d4" stroke-width="1.2"/>
+  <circle cx="25.5" cy="22" r="3.5" fill="#fff" stroke="#34a853" stroke-width="1.2"/>
+</svg>

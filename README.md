@@ -2,6 +2,16 @@
 
 A web file manager for one or more Google Drive accounts. Browse folders, copy files between users, edit `.txt`/`.json` in Notepad, and share deep links — works on desktop and mobile, and deploys to GitHub Pages.
 
+**Live demo:** [https://mishamikuseleks.github.io/my_google/](https://mishamikuseleks.github.io/my_google/)
+
+**Legal pages (for Google OAuth consent screen):**
+
+| Field | URL |
+|-------|-----|
+| Application home page | https://mishamikuseleks.github.io/my_google/ |
+| Privacy policy | https://mishamikuseleks.github.io/my_google/privacy.html |
+| Terms of Service | https://mishamikuseleks.github.io/my_google/terms.html |
+
 ## Features
 
 - Multi-user Google sign-in (add several Drive accounts)
