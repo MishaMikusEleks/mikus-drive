@@ -4,22 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GitHub Sign-in</title>
+  <script src="js/github-oauth-deliver.js"></script>
 </head>
 <body>
+  <p id="status">Completing GitHub sign-in…</p>
   <script>
     (function () {
+      const statusEl = document.getElementById('status');
       const params = new URLSearchParams(location.search);
-      const payload = {
-        source: 'mikus-drive-github-oauth',
-        code: params.get('code'),
-        state: params.get('state'),
-        error: params.get('error'),
-        error_description: params.get('error_description'),
-      };
-      if (window.opener) {
-        window.opener.postMessage(payload, location.origin);
+      GithubOAuthDeliver.deliverFromSearchParams();
+
+      if (!params.get('state')) {
+        statusEl.textContent = 'Missing OAuth state. You can close this window.';
+        return;
       }
-      window.close();
+
+      if (params.has('error')) {
+        statusEl.textContent = params.get('error_description') || params.get('error') || 'GitHub authorization failed.';
+        return;
+      }
+
+      if (!params.has('code')) {
+        statusEl.textContent = 'GitHub did not return an authorization code. You can close this window.';
+        return;
+      }
+
+      statusEl.textContent = 'Signed in. This window will close automatically…';
+      setTimeout(() => window.close(), 500);
     })();
   </script>
 </body>

@@ -247,6 +247,11 @@ const Notepad = (() => {
     try {
       await LocalDisk.init();
       GithubDisk.init();
+      GithubDisk.setSaveStateListener((diskId, filePath) => {
+        if (!GithubDisk.isGithubId(state.userId) || !state.fileId) return;
+        if (diskId !== state.userId || filePath !== state.fileId) return;
+        updateStatus();
+      });
       await loadFromUrl();
     } catch (err) {
       app.showError(err.message);
@@ -262,7 +267,7 @@ const Notepad = (() => {
         if (!statusEl) return;
         statusEl.textContent = msg;
         setTimeout(() => {
-          if (statusEl.textContent === msg) statusEl.textContent = '';
+          if (statusEl.textContent === msg) updateStatus();
         }, 3000);
       },
     });
@@ -283,7 +288,7 @@ const Notepad = (() => {
     const legacyUserId = params.get('user');
     if (legacyUserId && !fileParam.includes('/')) {
       if (!Auth.getUsers().find((u) => u.id === legacyUserId)) {
-        app.showError(`User not signed in. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive'} and sign in first.`);
+        app.showError(`User not signed in. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} and sign in first.`);
         return;
       }
       try {
@@ -338,7 +343,7 @@ const Notepad = (() => {
 
     const user = Auth.getUsers().find((u) => Auth.formatDisplayEmail(u.email) === segments[0]);
     if (!user) {
-      app.showError(`Drive not found. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive'} and sign in or add local/GitHub storage first.`);
+      app.showError(`Drive not found. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} and sign in or add local/GitHub storage first.`);
       return;
     }
 
@@ -427,7 +432,7 @@ const Notepad = (() => {
 
     if (!options.length) {
       await Dialog.alert(
-        'No storage is available. Open Mikus Drive and sign in or create local storage.',
+        'No storage is available. Open Storage Hub and sign in or create local storage.',
         { title: 'Save elsewhere' }
       );
       return null;
@@ -967,8 +972,20 @@ const Notepad = (() => {
     app.showStatus?.('Replaced all matches');
   }
 
+  function getGithubSaveStatusText() {
+    if (!GithubDisk.isGithubId(state.userId) || !state.fileId) return '';
+    const saveState = GithubDisk.getFileSaveState(state.userId, state.fileId);
+    if (!saveState) return '';
+    if (saveState.status === 'saving') return 'Saving…';
+    if (saveState.status === 'pending') return 'Pending save…';
+    if (saveState.status === 'error') return saveState.error || 'Save failed';
+    return '';
+  }
+
   function updateStatus() {
     modifiedEl.textContent = state.dirty ? '*' : '';
+    const saveText = getGithubSaveStatusText();
+    if (statusEl) statusEl.textContent = saveText;
     const suffix = state.dirty ? '*' : '';
     const title = `${state.fileName}${suffix} - Notepad`;
     titleEl.textContent = title;
@@ -1254,7 +1271,7 @@ const Notepad = (() => {
       case 'about':
         await Dialog.alert(
           'A simple text editor for .txt and .json files on Google Drive, local storage, and GitHub repos.',
-          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive'} Notepad` }
+          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} Notepad` }
         );
         break;
     }

@@ -180,6 +180,65 @@ const Drive = (() => {
     },
   };
 
+  const GOOGLE_EXPORT_FOR_EXTERNAL = {
+    'application/vnd.google-apps.document': {
+      export: 'text/plain',
+      ext: '.txt',
+      mime: 'text/plain',
+    },
+    'application/vnd.google-apps.spreadsheet': {
+      export: 'text/csv',
+      ext: '.csv',
+      mime: 'text/csv',
+    },
+    'application/vnd.google-apps.presentation': {
+      export: 'text/plain',
+      ext: '.txt',
+      mime: 'text/plain',
+    },
+    'application/vnd.google-apps.drawing': {
+      export: 'image/png',
+      ext: '.png',
+      mime: 'image/png',
+    },
+  };
+
+  async function getFileBlobForExternalCopy(token, fileId, fileMeta) {
+    let meta = fileMeta;
+    if (!meta?.mimeType || !meta?.name) {
+      meta = await apiRequest(`/files/${fileId}?fields=id,name,mimeType`, token);
+    }
+
+    const googleExport = GOOGLE_EXPORT_FOR_EXTERNAL[meta.mimeType];
+    if (googleExport) {
+      const res = await apiRequest(
+        `/files/${fileId}/export?mimeType=${encodeURIComponent(googleExport.export)}`,
+        token,
+        { raw: true }
+      );
+      let name = meta.name;
+      if (googleExport.ext && !name.toLowerCase().endsWith(googleExport.ext)) {
+        name += googleExport.ext;
+      }
+      return {
+        blob: await res.blob(),
+        name,
+        mimeType: googleExport.mime,
+      };
+    }
+
+    if (meta.mimeType?.startsWith('application/vnd.google-apps.')) {
+      throw new Error(`Google Workspace type "${meta.name}" cannot be copied to GitHub storage`);
+    }
+
+    const blob = await downloadFile(token, fileId, meta.mimeType);
+    return {
+      blob,
+      name: meta.name,
+      mimeType: meta.mimeType || 'application/octet-stream',
+    };
+  }
+
   async function copyItemToUser(sourceToken, destToken, fileId, destParentId, fileMeta) {
     let meta = fileMeta;
     if (!meta?.mimeType || !meta?.name) {
@@ -392,9 +451,11 @@ const Drive = (() => {
   }
 
   function getIcon(file) {
-    if (file.mimeType === FOLDER_MIME) return MIME_ICONS[FOLDER_MIME];
+    const mimeType = typeof file === 'string' ? file : file?.mimeType;
+    if (!mimeType) return '📄';
+    if (mimeType === FOLDER_MIME) return MIME_ICONS[FOLDER_MIME];
     for (const [prefix, icon] of Object.entries(MIME_ICONS)) {
-      if (prefix.endsWith('/') ? file.mimeType.startsWith(prefix) : file.mimeType === prefix) {
+      if (prefix.endsWith('/') ? mimeType.startsWith(prefix) : mimeType === prefix) {
         return icon;
       }
     }
@@ -698,6 +759,15 @@ const Drive = (() => {
     return path;
   }
 
+  async function createFileFromBlob(token, parentId, name, mimeType, blob) {
+    return uploadBlobMultipart(
+      token,
+      { name, mimeType: mimeType || 'application/octet-stream', parents: [parentId] },
+      blob,
+      mimeType || 'application/octet-stream'
+    );
+  }
+
   return {
     ROOT_ID,
     getDefaultIcon: getIcon,
@@ -716,6 +786,7 @@ const Drive = (() => {
     deleteFile,
     createFolder,
     createFile,
+    createFileFromBlob,
     createGoogleApp,
     getTextFileContent,
     updateFileContent,
@@ -728,6 +799,7 @@ const Drive = (() => {
     buildNotepadFilePath,
     resolveFileByPath,
     copyItemToUser,
+    getFileBlobForExternalCopy,
     copyFile,
     moveFile,
     downloadFile,

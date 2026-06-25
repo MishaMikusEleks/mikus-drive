@@ -1,5 +1,5 @@
 const Router = (() => {
-  const ROOT_LABEL = typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive';
+  const ROOT_LABEL = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
   let suppressRoute = false;
   let onNavigate = null;
   let basePath;

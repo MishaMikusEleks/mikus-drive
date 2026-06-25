@@ -1,6 +1,6 @@
 const App = (() => {
   const ROOT_ID = 'home';
-  const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive';
+  const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
   const TREE_PAGE_SIZE = 10;
 
   const state = {
@@ -769,7 +769,7 @@ const App = (() => {
       navigateToLocalDisk(crumb.id, LocalDisk.ROOT_ID);
     } else if (GithubDisk.getDisk(crumb.id)) {
       navigateToGithubDisk(crumb.id, GithubDisk.ROOT_ID);
-    } else if (crumb.id.startsWith('user:')) {
+    } else if (crumb.id?.startsWith('user:')) {
       navigateToUser(crumb.id.slice(5), Drive.ROOT_ID);
     } else if (crumb.id === Drive.ROOT_ID || crumb.id === LocalDisk.ROOT_ID || crumb.id === GithubDisk.ROOT_ID) {
       if (LocalDisk.isLocalId(state.currentUserId)) {
@@ -791,7 +791,7 @@ const App = (() => {
   }
 
   function getFileTypeIcon(file) {
-    return file.icon || Drive.getDefaultIcon(file.mimeType) || '📄';
+    return file.icon || Drive.getDefaultIcon(file) || '📄';
   }
 
   function renderFileIcon(file, sizeClass = '') {
@@ -821,24 +821,48 @@ const App = (() => {
     </span>`;
   }
 
+  function getPendingDisplayLabel(file) {
+    if (file.pendingStatus === 'error') return file.pendingError || 'Failed';
+    if (file.pending && file.dateFormatted) return file.dateFormatted;
+    if (file.pendingStatus === 'saving') return 'Saving…';
+    if (file.pendingStatus === 'moving') return 'Moving…';
+    if (file.pendingStatus === 'pending') {
+      if (file.pendingKind === 'save') return 'Pending save…';
+      if (file.pendingKind === 'move') return 'Pending movement…';
+      return 'Pending on GitHub…';
+    }
+    if (file.pendingStatus === 'syncing') return 'Uploading…';
+    return 'Syncing…';
+  }
+
+  function renderFileStatusBadge(file) {
+    if (file.pending) {
+      const label = getPendingDisplayLabel(file);
+      return `<span class="file-pending-badge file-pending-badge--${file.pendingStatus || 'syncing'}">${escapeHtml(label)}</span>`;
+    }
+    if (file.isUserDrive || file.isLocalDisk || file.isGithubDisk) {
+      return `<span class="file-quota">${escapeHtml(file.quotaLabel || '…')}</span>`;
+    }
+    return '';
+  }
+
   function renderGrid() {
     const grid = $('#file-grid');
     grid.innerHTML = '';
 
     state.files.forEach((file) => {
       const item = document.createElement('div');
-      item.className = 'file-item' + (file.id === state.selectedId ? ' selected' : '');
+      const pendingClass = file.pending ? ` file-item--pending file-item--pending-${file.pendingStatus || 'syncing'}` : '';
+      item.className = 'file-item' + (file.id === state.selectedId ? ' selected' : '') + pendingClass;
       item.dataset.id = file.id;
-      const quotaHtml = (file.isUserDrive || file.isLocalDisk)
-        ? `<span class="file-quota">${escapeHtml(file.quotaLabel || '…')}</span>`
-        : '';
+      const statusHtml = renderFileStatusBadge(file);
       item.innerHTML = `
         <button type="button" class="item-more-btn" aria-label="Actions for ${escapeHtml(file.name)}">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
         <div class="file-icon">${renderFileIcon(file)}</div>
         <span class="file-name">${escapeHtml(file.name)}</span>
-        ${quotaHtml}
+        ${statusHtml}
       `;
       item.addEventListener('click', () => selectFile(file.id));
       item.addEventListener('dblclick', () => openFile(file));
@@ -855,14 +879,16 @@ const App = (() => {
 
     state.files.forEach((file) => {
       const row = document.createElement('div');
-      row.className = 'list-row' + (file.id === state.selectedId ? ' selected' : '');
+      const pendingClass = file.pending ? ` file-item--pending file-item--pending-${file.pendingStatus || 'syncing'}` : '';
+      row.className = 'list-row' + (file.id === state.selectedId ? ' selected' : '') + pendingClass;
       row.dataset.id = file.id;
+      const modifiedLabel = file.pending ? getPendingDisplayLabel(file) : file.dateFormatted;
       row.innerHTML = `
         <span class="col-name">
           <span class="list-icon">${renderFileIcon(file, 'file-icon-wrap--small')}</span>
           <span class="list-name-text">${escapeHtml(file.name)}</span>
         </span>
-        <span class="col-modified">${file.dateFormatted}</span>
+        <span class="col-modified">${escapeHtml(modifiedLabel)}</span>
         <span class="col-size">${file.sizeFormatted}</span>
         <span class="col-type">${file.typeName}</span>
         <button type="button" class="item-more-btn" aria-label="Actions for ${escapeHtml(file.name)}">
@@ -928,6 +954,19 @@ const App = (() => {
         state.currentUserId = prevUserId;
       });
     } else if (userId && GithubDisk.isGithubId(userId) && !file.isFolder) {
+      if (file.pending) {
+        showStatus(getPendingDisplayLabel(file));
+        return;
+      }
+      if (GithubDisk.isBrowserViewableFile(file)) {
+        try {
+          const url = file.viewUrl || GithubDisk.getFileViewUrl(userId, file.id);
+          window.open(url, '_blank', 'noopener');
+        } catch (err) {
+          showError(err.message);
+        }
+        return;
+      }
       GithubDisk.downloadFile(userId, file.id).then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1009,15 +1048,26 @@ const App = (() => {
   function getActiveNavId() {
     if (state.level === 'home') return 'home';
     if (!state.currentUserId) return 'home';
-    const drivePrefix = isCurrentLocalDrive() ? 'disk' : isCurrentGithubDrive() ? 'github' : 'user';
     if (state.section === 'my-drive') {
       const rootId = getDriveRootId();
       if (state.currentFolderId !== rootId) {
         return folderNavId(state.currentUserId, state.currentFolderId);
       }
-      return `${drivePrefix}:${state.currentUserId}:my-drive`;
+      if (isCurrentLocalDrive()) {
+        return `disk:${toDiskNavId(state.currentUserId)}:my-drive`;
+      }
+      if (isCurrentGithubDrive()) {
+        return `github:${toGithubNavId(state.currentUserId)}:my-drive`;
+      }
+      return `user:${state.currentUserId}:my-drive`;
     }
-    return `${drivePrefix}:${state.currentUserId}:${state.section}`;
+    if (isCurrentLocalDrive()) {
+      return `disk:${toDiskNavId(state.currentUserId)}:${state.section}`;
+    }
+    if (isCurrentGithubDrive()) {
+      return `github:${toGithubNavId(state.currentUserId)}:${state.section}`;
+    }
+    return `user:${state.currentUserId}:${state.section}`;
   }
 
   function setSidebarActive(itemId) {
@@ -1699,6 +1749,39 @@ const App = (() => {
     else openSidebar();
   }
 
+  async function refreshGithubFolderView({ reloadTree = true, silent = false } = {}) {
+    if (!GithubDisk.isGithubId(state.currentUserId)) return;
+    const diskId = state.currentUserId;
+    const disk = GithubDisk.getDisk(diskId);
+    if (!disk) return;
+
+    try {
+      if (!silent) showError(null);
+      if (reloadTree) GithubDisk.invalidateRepoTree(diskId);
+      state.files = await GithubDisk.listFiles(diskId, state.currentFolderId);
+      state.breadcrumbs = await buildBreadcrumbs(null, state.currentFolderId, disk);
+      renderBreadcrumbs();
+      renderCurrentView();
+      if (reloadTree) {
+        clearTreeCache(diskId);
+        await syncTreeWithCurrentPath(diskId, null);
+        renderSidebarTree();
+      } else {
+        setSidebarActive(getActiveNavId());
+      }
+    } catch (err) {
+      if (!silent) showError(err.message);
+    }
+  }
+
+  async function refreshCurrentDrive(options = {}) {
+    if (GithubDisk.isGithubId(state.currentUserId)) {
+      await refreshGithubFolderView(options);
+      return;
+    }
+    await loadCurrentLocation();
+  }
+
   async function loadCurrentLocation() {
     if (isMobileLayout()) closeSidebar();
     setLoading(true);
@@ -1872,6 +1955,10 @@ const App = (() => {
     const rootId = getDriveRootId();
     if (state.currentFolderId !== rootId) {
       const parent = state.breadcrumbs[state.breadcrumbs.length - 2];
+      if (!parent?.id) {
+        navigateToMyGoogle();
+        return;
+      }
       if (parent.id.startsWith('user:')) {
         navigateToUser(parent.id.slice(5), Drive.ROOT_ID);
       } else if (LocalDisk.getDisk(parent.id)) {
@@ -2018,7 +2105,7 @@ const App = (() => {
     return file.parentId || file.parents?.[0] || (LocalDisk.isLocalId(userId) ? LocalDisk.ROOT_ID : GithubDisk.isGithubId(userId) ? GithubDisk.ROOT_ID : Drive.ROOT_ID);
   }
 
-  const DRAG_MIME = 'application/x-mikus-drive-item';
+  const DRAG_MIME = 'application/x-storage-hub-item';
 
   function getDescendantFolderIds(userId, folderId) {
     const ids = new Set([folderId]);
@@ -2049,7 +2136,7 @@ const App = (() => {
   }
 
   function attachDragSource(el, file, userId, parentId) {
-    if (file.isUserDrive || file.isLocalDisk || file.isGithubDisk) return;
+    if (file.pending || file.isUserDrive || file.isLocalDisk || file.isGithubDisk) return;
     el.draggable = true;
     el.addEventListener('dragstart', (e) => {
       const payload = {
@@ -2202,6 +2289,11 @@ const App = (() => {
     $('#btn-up').addEventListener('click', navigateUp);
     $('#btn-refresh').addEventListener('click', () => {
       if (state.currentUserId) clearTreeCache(state.currentUserId);
+      if (GithubDisk.isGithubId(state.currentUserId)) {
+        GithubDisk.invalidateRepoTree(state.currentUserId);
+        refreshGithubFolderView({ reloadTree: true });
+        return;
+      }
       loadCurrentLocation();
     });
 
@@ -2421,6 +2513,11 @@ const App = (() => {
       showError(err.message);
     }
     GithubDisk.init();
+    GithubDisk.setListChangeListener((diskId) => {
+      if (GithubDisk.isGithubId(state.currentUserId) && state.currentUserId === diskId) {
+        refreshGithubFolderView({ reloadTree: false, silent: true });
+      }
+    });
 
     ContextMenu.init({
       openFile,
@@ -2428,7 +2525,8 @@ const App = (() => {
       navigateToLocalDisk,
       navigateToGithubDisk,
       navigateToMyGoogle,
-      refresh: () => loadCurrentLocation(),
+      refresh: () => refreshCurrentDrive({ reloadTree: true }),
+      refreshGithubFolder: () => refreshGithubFolderView({ reloadTree: true }),
       refreshUserQuotas,
       clearTreeCache,
       showError,

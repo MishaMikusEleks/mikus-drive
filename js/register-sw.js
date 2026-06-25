@@ -1,14 +1,34 @@
-const MikusCache = (() => {
-  const VERSION_KEY = 'mikus_drive_app_version';
+const StorageHubCache = (() => {
+  const VERSION_KEY = 'storage_hub_app_version';
+  const LEGACY_VERSION_KEY = 'mikus_drive_app_version';
 
   // App shell cache only — never clear Google sessions, local storage volumes, or profiles.
   const PRESERVED_LOCAL_STORAGE_KEYS = [
+    'storage_hub_users',
     'mikus_drive_users',
     'my_google_users',
+    'storage_hub_local_disks',
     'mikus_drive_local_disks',
+    'storage_hub_local_user',
     'mikus_drive_local_user',
+    'storage_hub_github_disks',
+    'mikus_drive_github_disks',
     VERSION_KEY,
+    LEGACY_VERSION_KEY,
   ];
+
+  const SW_RELOAD_KEY = 'storage_hub_sw_reload';
+  const LEGACY_SW_RELOAD_KEY = 'mikus_sw_reload';
+
+  function migrateVersionKey() {
+    if (typeof StorageMigrate !== 'undefined') {
+      StorageMigrate.migrateLocalStorageKey(VERSION_KEY, [LEGACY_VERSION_KEY]);
+      return;
+    }
+    if (!localStorage.getItem(VERSION_KEY) && localStorage.getItem(LEGACY_VERSION_KEY)) {
+      localStorage.setItem(VERSION_KEY, localStorage.getItem(LEGACY_VERSION_KEY));
+    }
+  }
 
   async function clearAllCaches() {
     if ('caches' in window) {
@@ -34,15 +54,17 @@ const MikusCache = (() => {
   }
 
   function reloadIfNeeded() {
-    if (sessionStorage.getItem('mikus_sw_reload') === '1') {
-      sessionStorage.removeItem('mikus_sw_reload');
+    if (sessionStorage.getItem(SW_RELOAD_KEY) === '1' || sessionStorage.getItem(LEGACY_SW_RELOAD_KEY) === '1') {
+      sessionStorage.removeItem(SW_RELOAD_KEY);
+      sessionStorage.removeItem(LEGACY_SW_RELOAD_KEY);
       return;
     }
-    sessionStorage.setItem('mikus_sw_reload', '1');
+    sessionStorage.setItem(SW_RELOAD_KEY, '1');
     location.reload();
   }
 
   async function handleVersionChange() {
+    migrateVersionKey();
     if (typeof APP_VERSION === 'undefined') return false;
     const stored = localStorage.getItem(VERSION_KEY);
     if (!stored) {
@@ -104,9 +126,10 @@ const MikusCache = (() => {
   };
 })();
 
-window.MikusDrive = window.MikusDrive || {};
-window.MikusDrive.clearCache = () => MikusCache.invalidateAppCaches().then(() => location.reload());
+window.StorageHub = window.StorageHub || {};
+window.StorageHub.clearCache = () => StorageHubCache.invalidateAppCaches().then(() => location.reload());
+window.MikusDrive = window.StorageHub;
 
 window.addEventListener('load', () => {
-  MikusCache.register();
+  StorageHubCache.register();
 });

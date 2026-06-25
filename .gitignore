@@ -1,0 +1,7 @@
+.git_key
+.github_secret
+.env
+node_modules/
+.DS_Store
+js/config.local.js
+client_secret_*.json

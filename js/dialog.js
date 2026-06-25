@@ -92,11 +92,19 @@ const Dialog = (() => {
     bodyEl.innerHTML = '';
     footerEl.innerHTML = '';
 
-    if (config.message) {
-      const msg = document.createElement('p');
-      msg.className = 'app-dialog-message';
-      msg.textContent = config.message;
+    if (config.messageHtml || config.message) {
+      const msg = document.createElement(config.messageHtml ? 'div' : 'p');
+      msg.className = config.messageHtml ? 'app-dialog-message app-dialog-message--html' : 'app-dialog-message';
+      if (config.messageHtml) {
+        msg.innerHTML = config.messageHtml;
+        cardEl.classList.add('app-dialog-card--wide');
+      } else {
+        msg.textContent = config.message;
+        cardEl.classList.remove('app-dialog-card--wide');
+      }
       bodyEl.appendChild(msg);
+    } else {
+      cardEl.classList.remove('app-dialog-card--wide');
     }
 
     const focusables = [];
@@ -257,7 +265,7 @@ const Dialog = (() => {
     return runExclusive(() =>
       show({
         type: 'alert',
-        title: options.title || (typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive'),
+        title: options.title || (typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'),
         message,
         okLabel: options.okLabel || 'OK',
       })
@@ -296,6 +304,7 @@ const Dialog = (() => {
         type: 'form',
         title: options.title || 'Input',
         message: options.message || '',
+        messageHtml: options.messageHtml || '',
         fields: options.fields || [],
         submitLabel: options.submitLabel || 'OK',
         cancelLabel: options.cancelLabel || 'Cancel',
@@ -309,6 +318,7 @@ const Dialog = (() => {
         type: 'choose',
         title: options.title || 'Choose',
         message: options.message || '',
+        messageHtml: options.messageHtml || '',
         buttons: options.buttons || [],
       })
     );

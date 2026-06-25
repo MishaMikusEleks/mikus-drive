@@ -1,8 +1,10 @@
 const LocalDisk = (() => {
   const ROOT_ID = 'root';
   const FOLDER_MIME = 'application/x-local-folder';
-  const STORAGE_KEY = 'mikus_drive_local_disks';
-  const DB_NAME = 'mikus_drive_local';
+  const STORAGE_KEY = 'storage_hub_local_disks';
+  const LEGACY_STORAGE_KEY = 'mikus_drive_local_disks';
+  const DB_NAME = 'storage_hub_local';
+  const LEGACY_DB_NAME = 'mikus_drive_local';
   const DB_VERSION = 2;
   const ID_PREFIX = 'local:';
 
@@ -24,6 +26,11 @@ const LocalDisk = (() => {
 
   function loadDisks() {
     try {
+      if (typeof StorageMigrate !== 'undefined') {
+        StorageMigrate.migrateLocalStorageKey(STORAGE_KEY, [LEGACY_STORAGE_KEY]);
+      } else if (!localStorage.getItem(STORAGE_KEY) && localStorage.getItem(LEGACY_STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, localStorage.getItem(LEGACY_STORAGE_KEY));
+      }
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"disks":[]}');
       disks = (data.disks || []).map((disk) => ({
         ...disk,
@@ -89,7 +96,70 @@ const LocalDisk = (() => {
     });
   }
 
+  async function migrateLegacyIndexedDbIfNeeded() {
+    const countEntries = (dbName) => new Promise((resolve) => {
+      const req = indexedDB.open(dbName);
+      req.onsuccess = () => {
+        const database = req.result;
+        if (!database.objectStoreNames.contains('entries')) {
+          database.close();
+          resolve(0);
+          return;
+        }
+        const tx = database.transaction('entries', 'readonly');
+        const countReq = tx.objectStore('entries').count();
+        countReq.onsuccess = () => {
+          database.close();
+          resolve(countReq.result || 0);
+        };
+        countReq.onerror = () => {
+          database.close();
+          resolve(0);
+        };
+      };
+      req.onerror = () => resolve(0);
+    });
+
+    const openLegacyDb = () => new Promise((resolve, reject) => {
+      const req = indexedDB.open(LEGACY_DB_NAME);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    const newCount = await countEntries(DB_NAME);
+    if (newCount > 0) return;
+
+    const legacyCount = await countEntries(LEGACY_DB_NAME);
+    if (legacyCount === 0) return;
+
+    let legacyDb;
+    try {
+      legacyDb = await openLegacyDb();
+    } catch {
+      return;
+    }
+
+    const entries = await new Promise((resolve, reject) => {
+      const tx = legacyDb.transaction('entries', 'readonly');
+      const getAll = tx.objectStore('entries').getAll();
+      getAll.onsuccess = () => resolve(getAll.result || []);
+      getAll.onerror = () => reject(getAll.error);
+    });
+    legacyDb.close();
+    if (!entries.length) return;
+
+    const database = await requestOpen();
+    await new Promise((resolve, reject) => {
+      const tx = database.transaction('entries', 'readwrite');
+      const store = tx.objectStore('entries');
+      entries.forEach((entry) => store.put(entry));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
   async function openDbOnce() {
+    await migrateLegacyIndexedDbIfNeeded();
     try {
       return await requestOpen();
     } catch (err) {

@@ -1,6 +1,6 @@
 importScripts('./js/app-version.js');
 
-const CACHE_NAME = `mikus-drive-${APP_VERSION}`;
+const CACHE_NAME = `storage-hub-${APP_VERSION}`;
 
 const SHELL_ASSETS = [
   './',
@@ -15,10 +15,12 @@ const SHELL_ASSETS = [
   './js/base-path.js',
   './js/config.js',
   './js/site-config.js',
+  './js/storage-migrate.js',
   './js/auth.js',
   './js/drive.js',
   './js/localdisk.js',
   './js/githubdisk.js',
+  './js/github-oauth-deliver.js',
   './js/localuser.js',
   './js/dialog.js',
   './js/router.js',
@@ -53,6 +55,9 @@ function isApiRequest(url) {
 function shellPath(pathname) {
   if (pathname.endsWith('notepad.html') || pathname.includes('notepad')) {
     return './notepad.html';
+  }
+  if (pathname.endsWith('github-oauth-callback.html') || pathname.includes('github-oauth-callback')) {
+    return './github-oauth-callback.html';
   }
   return './index.html';
 }

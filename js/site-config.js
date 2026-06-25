@@ -1,11 +1,11 @@
 const SITE = {
-  name: 'Mikus Drive',
-  tagline: 'Browse multiple Google Drive accounts in a Windows-style file manager.',
+  name: 'Storage Hub',
+  tagline: 'A unified file manager for Google Drive, local storage, and GitHub repositories.',
   developer: 'Mykhailo Mikus',
   developerUrl: 'https://github.com/MishaMikusEleks',
-  githubRepo: 'https://github.com/MishaMikusEleks/mikus-drive',
-  homepage: 'https://mishamikuseleks.github.io/mikus-drive/',
-  basePath: '/mikus-drive',
+  githubRepo: 'https://github.com/MishaMikusEleks/storage-hub',
+  homepage: 'https://mishamikuseleks.github.io/storage-hub/',
+  basePath: '/storage-hub',
   // Search Console → URL prefix → HTML tag → paste content value here.
   // Must also appear as a static <meta> inside <head> of index.html (Google does not run JS).
   googleSiteVerification: 'eNqApo7Us9h2GKVx8_t4RmmMv1CDldejNsnmMH7RjQ8',

@@ -1,5 +1,6 @@
 const LocalUser = (() => {
-  const STORAGE_KEY = 'mikus_drive_local_user';
+  const STORAGE_KEY = 'storage_hub_local_user';
+  const LEGACY_STORAGE_KEY = 'mikus_drive_local_user';
   const DEFAULT_NAME = 'Local user';
   const DEFAULT_AVATAR = 'assets/default-avatar.svg';
 
@@ -7,6 +8,11 @@ const LocalUser = (() => {
 
   function load() {
     try {
+      if (typeof StorageMigrate !== 'undefined') {
+        StorageMigrate.migrateLocalStorageKey(STORAGE_KEY, [LEGACY_STORAGE_KEY]);
+      } else if (!localStorage.getItem(STORAGE_KEY) && localStorage.getItem(LEGACY_STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, localStorage.getItem(LEGACY_STORAGE_KEY));
+      }
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
       if (data && typeof data.name === 'string') {
         profile = {

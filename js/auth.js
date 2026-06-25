@@ -1,6 +1,6 @@
 const Auth = (() => {
-  const STORAGE_KEY = 'mikus_drive_users';
-  const LEGACY_STORAGE_KEY = 'my_google_users';
+  const STORAGE_KEY = 'storage_hub_users';
+  const LEGACY_STORAGE_KEYS = ['mikus_drive_users', 'my_google_users'];
   const DEFAULT_AVATAR = 'assets/default-avatar.svg';
 
   let tokenClient = null;
@@ -11,8 +11,14 @@ const Auth = (() => {
 
   function loadUsers() {
     try {
-      if (!localStorage.getItem(STORAGE_KEY) && localStorage.getItem(LEGACY_STORAGE_KEY)) {
-        localStorage.setItem(STORAGE_KEY, localStorage.getItem(LEGACY_STORAGE_KEY));
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        for (const legacyKey of LEGACY_STORAGE_KEYS) {
+          const legacy = localStorage.getItem(legacyKey);
+          if (legacy) {
+            localStorage.setItem(STORAGE_KEY, legacy);
+            break;
+          }
+        }
       }
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       users = data.users || [];

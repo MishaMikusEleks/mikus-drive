@@ -1,5 +1,6 @@
 const BasePath = (() => {
-  const APP_ROOT_KEY = 'mikus_drive_app_root';
+  const APP_ROOT_KEY = 'storage_hub_app_root';
+  const LEGACY_APP_ROOT_KEY = 'mikus_drive_app_root';
 
   function getConfigured() {
     if (typeof CONFIG !== 'undefined' && CONFIG.BASE_PATH != null && CONFIG.BASE_PATH !== '') {
@@ -13,6 +14,11 @@ const BasePath = (() => {
 
   function readStoredRoot() {
     try {
+      if (typeof StorageMigrate !== 'undefined') {
+        StorageMigrate.migrateSessionStorageKey(APP_ROOT_KEY, [LEGACY_APP_ROOT_KEY]);
+      } else if (!sessionStorage.getItem(APP_ROOT_KEY) && sessionStorage.getItem(LEGACY_APP_ROOT_KEY)) {
+        sessionStorage.setItem(APP_ROOT_KEY, sessionStorage.getItem(LEGACY_APP_ROOT_KEY));
+      }
       const stored = sessionStorage.getItem(APP_ROOT_KEY);
       return stored != null ? stored : null;
     } catch {

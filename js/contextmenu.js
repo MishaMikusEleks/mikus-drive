@@ -116,6 +116,17 @@ const ContextMenu = (() => {
     return GithubDisk.isGithubId(id);
   }
 
+  function getGithubFolderWebUrl(ctx) {
+    if (!isGithubCtx(ctx)) return null;
+    const diskId = getDriveId(ctx);
+    if (!diskId) return null;
+    const folderId = ctx.folderId;
+    if (!folderId || folderId === GithubDisk.ROOT_ID) {
+      return GithubDisk.getRepoWebUrl(diskId);
+    }
+    return GithubDisk.getItemWebUrl(diskId, folderId, true);
+  }
+
   function getDriveId(ctx = context) {
     return ctx?.diskId || ctx?.file?.userId || ctx?.userId;
   }
@@ -161,7 +172,7 @@ const ContextMenu = (() => {
     const localCount = LocalDisk.getDisks().length;
     const githubCount = GithubDisk.getDisks().length;
     return [
-      { action: 'open', label: `Open ${typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive'}`, icon: '🏠' },
+      { action: 'open', label: `Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'}`, icon: '🏠' },
       { sep: true },
       { header: 'Add storage' },
       ...buildAddDiskMenuItems(),
@@ -172,7 +183,9 @@ const ContextMenu = (() => {
         disabled: userCount === 0 && localCount === 0 && githubCount === 0,
       },
       { sep: true },
-      { action: 'root-info', label: 'General information', icon: 'ℹ️' },
+      { action: 'root-info', label: 'Information', icon: 'ℹ️' },
+      { sep: true },
+      { action: 'clear-app-cache', label: 'Clear app cache', icon: '🧹' },
       { sep: true },
       { action: 'refresh', label: 'Refresh', icon: '🔄' },
     ];
@@ -182,8 +195,7 @@ const ContextMenu = (() => {
     return [
       { action: 'open', label: 'Open My Drive', icon: '📂' },
       { sep: true },
-      { action: 'local-disk-info', label: 'General information', icon: 'ℹ️' },
-      { action: 'local-disk-details', label: 'Detailed information', icon: '📋' },
+      { action: 'local-disk-info', label: 'Information', icon: 'ℹ️' },
       { sep: true },
       { action: 'rename-local-disk', label: 'Rename', icon: '✏️' },
       { sep: true },
@@ -193,12 +205,15 @@ const ContextMenu = (() => {
     ];
   }
 
-  function buildGithubDiskMenuItems() {
+  function buildGithubDiskMenuItems(disk) {
+    const repoUrl = disk?.repoHtmlUrl || (disk ? `https://github.com/${disk.owner}/${disk.repo}` : '');
     return [
       { action: 'open', label: 'Open My Drive', icon: '📂' },
       { sep: true },
-      { action: 'github-disk-info', label: 'General information', icon: 'ℹ️' },
-      { action: 'github-disk-details', label: 'Detailed information', icon: '📋' },
+      { action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: repoUrl },
+      { action: 'copy-link', label: 'Copy repository link', icon: '🔗', url: repoUrl },
+      { sep: true },
+      { action: 'github-disk-info', label: 'Information', icon: 'ℹ️' },
       { sep: true },
       { action: 'eject-github-disk', label: 'Eject', icon: '⏏️' },
       { sep: true },
@@ -210,8 +225,7 @@ const ContextMenu = (() => {
     const items = [
       { action: 'open', label: 'Open My Drive', icon: '📂' },
       { sep: true },
-      { action: 'user-info', label: 'General information', icon: 'ℹ️' },
-      { action: 'user-details', label: 'Detailed information', icon: '📋' },
+      { action: 'user-info', label: 'Information', icon: 'ℹ️' },
       { sep: true },
       { header: 'Google services' },
       ...USER_SERVICE_LINKS.map((svc) => ({
@@ -332,8 +346,22 @@ const ContextMenu = (() => {
       items.push({ action: 'download', label: 'Download', icon: '⬇️' });
     }
 
+    if (!isEmpty && file?.webViewLink && isGithubCtx()) {
+      items.push({ sep: true });
+      items.push({ action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: file.webViewLink });
+    }
+
     if (!isEmpty && file?.webViewLink) {
-      items.push({ action: 'copy-link', label: 'Copy link', icon: '🔗' });
+      items.push({ action: 'copy-link', label: 'Copy link', icon: '🔗', url: file.webViewLink });
+    }
+
+    if (isEmpty && isGithubCtx()) {
+      const folderUrl = getGithubFolderWebUrl(context);
+      if (folderUrl) {
+        items.push({ sep: true });
+        items.push({ action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: folderUrl });
+        items.push({ action: 'copy-link', label: 'Copy link', icon: '🔗', url: folderUrl });
+      }
     }
 
     if (!isEmpty && file) {
@@ -356,7 +384,7 @@ const ContextMenu = (() => {
   function getMenuTitle(ctx = context) {
     if (!ctx) return 'Actions';
     if (ctx.type === 'add-disk') return 'Add storage';
-    if (ctx.type === 'root') return typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive';
+    if (ctx.type === 'root') return typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
     if (ctx.type === 'empty') return 'Folder actions';
     if ((ctx.type === 'local-disk' || ctx.file?.isLocalDisk) && (ctx.disk || getContextLocalDisk(ctx))) {
       return (ctx.disk || getContextLocalDisk(ctx)).name;
@@ -518,7 +546,7 @@ const ContextMenu = (() => {
     const active = Auth.getActiveUser();
     const localProfile = LocalUser.getProfile();
     const rows = [
-      { section: typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive' },
+      { section: typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub' },
       ['Location', 'Root'],
       ['Mounted drives', String(users.length + localDisks.length + githubDisks.length)],
       ['Google drives', String(users.length)],
@@ -584,7 +612,7 @@ const ContextMenu = (() => {
   }
 
   async function showRootProperties() {
-    propsEl.querySelector('.props-title').textContent = typeof SITE !== 'undefined' ? SITE.name : 'Mikus Drive';
+    propsEl.querySelector('.props-title').textContent = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
     propsEl.querySelector('.props-body').innerHTML = '<div class="props-loading">Loading metrics…</div>';
     propsEl.classList.remove('hidden');
 
@@ -597,7 +625,7 @@ const ContextMenu = (() => {
     }
   }
 
-  async function showUserProperties(mode, ctx) {
+  async function showUserProperties(ctx) {
     const user = getContextUser(ctx);
     if (!user) return;
 
@@ -606,9 +634,7 @@ const ContextMenu = (() => {
     propsEl.classList.remove('hidden');
 
     try {
-      const rows = mode === 'details'
-        ? await buildDetailedUserRows(user)
-        : buildGeneralUserRows(user);
+      const rows = await buildDetailedUserRows(user);
       propsEl.querySelector('.props-body').innerHTML = renderPropsRows(rows);
     } catch (err) {
       propsEl.querySelector('.props-body').innerHTML =
@@ -650,16 +676,10 @@ const ContextMenu = (() => {
           await createGithubDisk();
           break;
         case 'local-disk-info':
-          await showLocalDiskProperties('general', ctx);
-          break;
-        case 'local-disk-details':
-          await showLocalDiskProperties('details', ctx);
+          await showLocalDiskProperties(ctx);
           break;
         case 'github-disk-info':
-          await showGithubDiskProperties('general', ctx);
-          break;
-        case 'github-disk-details':
-          await showGithubDiskProperties('details', ctx);
+          await showGithubDiskProperties(ctx);
           break;
         case 'rename-local-disk': {
           const disk = getContextLocalDisk(ctx);
@@ -709,11 +729,21 @@ const ContextMenu = (() => {
         case 'root-info':
           await showRootProperties();
           break;
-        case 'user-info':
-          await showUserProperties('general', ctx);
+        case 'clear-app-cache':
+          if (await Dialog.confirm(
+            'Clear cached app files (HTML, CSS, JavaScript)?\n\n' +
+            'Signed-in Google accounts, local storage volumes, and GitHub tokens are kept.',
+            { title: 'Clear app cache', confirmLabel: 'Clear cache' }
+          )) {
+            if (window.StorageHub?.clearCache) {
+              window.StorageHub.clearCache();
+            } else {
+              location.reload();
+            }
+          }
           break;
-        case 'user-details':
-          await showUserProperties('details', ctx);
+        case 'user-info':
+          await showUserProperties(ctx);
           break;
         case 'open-service':
           if (actionUrl) window.open(actionUrl, '_blank', 'noopener');
@@ -755,10 +785,18 @@ const ContextMenu = (() => {
           }
           break;
         case 'cut':
+          if (file?.pending) {
+            app.showStatus('This item is still syncing with GitHub');
+            break;
+          }
           clipboard = { mode: 'cut', userId: ctx.userId, items: [file], parentId: file.parents?.[0] || ctx.folderId };
           app.showStatus(`Cut "${file.name}" — paste into any user folder`);
           break;
         case 'copy':
+          if (file?.pending) {
+            app.showStatus('This item is still syncing with GitHub');
+            break;
+          }
           clipboard = { mode: 'copy', userId: ctx.userId, items: [file] };
           app.showStatus(`Copied "${file.name}" — paste into any user folder`);
           break;
@@ -786,12 +824,19 @@ const ContextMenu = (() => {
         case 'download':
           await downloadFile(ctx);
           break;
-        case 'copy-link':
-          if (file?.webViewLink) {
-            await navigator.clipboard.writeText(file.webViewLink);
+        case 'open-github':
+          if (actionUrl || file?.webViewLink) {
+            window.open(actionUrl || file.webViewLink, '_blank', 'noopener');
+          }
+          break;
+        case 'copy-link': {
+          const linkToCopy = actionUrl || file?.webViewLink;
+          if (linkToCopy) {
+            await navigator.clipboard.writeText(linkToCopy);
             app.showStatus('Link copied');
           }
           break;
+        }
         case 'properties':
           await showProperties(ctx);
           break;
@@ -864,9 +909,27 @@ const ContextMenu = (() => {
   }
 
   async function createGithubDisk() {
-    const disk = await GithubDisk.createDisk();
-    app.refresh?.();
-    app.showStatus(`Connected GitHub storage "${disk.name}"`);
+    try {
+      const disk = await GithubDisk.createDisk();
+      app.refresh?.();
+      app.showStatus(`Connected GitHub storage "${disk.name}"`);
+    } catch (err) {
+      const message = err.message || '';
+      if (/sign-in cancelled/i.test(message)) return;
+      if (/invalid github token|write access|could not access|already connected|repository name cannot be empty/i.test(message)) {
+        await Dialog.alert(message, { title: 'GitHub sign-in failed' });
+        return;
+      }
+      if (/popup closed|63342|python3 serve\.py|failed to fetch|token proxy|token exchange|GITHUB_TOKEN_EXCHANGE_URL|static hosting|not reachable|IntelliJ|WebStorm preview/i.test(message)) {
+        await Dialog.alert(message, { title: 'GitHub sign-in failed' });
+        return;
+      }
+      if (/redirect_uri|misconfigured/i.test(message)) {
+        await Dialog.alert(message, { title: 'GitHub OAuth callback mismatch' });
+        return;
+      }
+      throw err;
+    }
   }
 
   function buildGeneralLocalDiskRows(disk, quota) {
@@ -908,7 +971,17 @@ const ContextMenu = (() => {
     ];
   }
 
-  async function showLocalDiskProperties(mode, ctx) {
+  function buildGithubDiskRows(disk, quota) {
+    return [
+      ...buildGeneralGithubDiskRows(disk, quota),
+      { section: 'Technical' },
+      ['Storage ID', disk.id],
+      ['Repository URL', disk.repoHtmlUrl || `https://github.com/${disk.owner}/${disk.repo}`],
+      ['OAuth scope', CONFIG.GITHUB_SCOPES || 'repo'],
+    ];
+  }
+
+  async function showLocalDiskProperties(ctx) {
     const disk = getContextLocalDisk(ctx);
     if (!disk) return;
 
@@ -917,9 +990,7 @@ const ContextMenu = (() => {
     propsEl.classList.remove('hidden');
 
     try {
-      const rows = mode === 'details'
-        ? await buildDetailedLocalDiskRows(disk)
-        : buildGeneralLocalDiskRows(disk, await LocalDisk.getStorageQuota(disk.id));
+      const rows = await buildDetailedLocalDiskRows(disk);
       propsEl.querySelector('.props-body').innerHTML = renderPropsRows(rows);
     } catch (err) {
       propsEl.querySelector('.props-body').innerHTML =
@@ -940,12 +1011,13 @@ const ContextMenu = (() => {
       ['Display name', disk.accountName || disk.accountLogin || '—'],
       { section: 'Usage' },
       ['Used', quota?.usageFormatted || '—'],
-      ['Limit', quota?.limitFormatted || '—'],
+      ['Recommended limit', quota?.limitFormatted || '—'],
+      ['GitHub maximum', quota?.maxLimitFormatted || '—'],
       ['Summary', quota?.label || '—'],
     ];
   }
 
-  async function showGithubDiskProperties(mode, ctx) {
+  async function showGithubDiskProperties(ctx) {
     const disk = getContextGithubDisk(ctx);
     if (!disk) return;
     propsEl.querySelector('.props-title').textContent = disk.name;
@@ -953,19 +1025,55 @@ const ContextMenu = (() => {
     propsEl.classList.remove('hidden');
     try {
       const quota = await GithubDisk.getStorageQuota(disk.id);
-      const rows = buildGeneralGithubDiskRows(disk, quota);
-      if (mode === 'details') {
-        rows.push(
-          { section: 'Technical' },
-          ['Storage ID', disk.id],
-          ['Repository URL', disk.repoHtmlUrl || `https://github.com/${disk.owner}/${disk.repo}`],
-          ['OAuth scope', CONFIG.GITHUB_SCOPES || 'repo']
-        );
-      }
+      const rows = buildGithubDiskRows(disk, quota);
       propsEl.querySelector('.props-body').innerHTML = renderPropsRows(rows);
     } catch (err) {
       propsEl.querySelector('.props-body').innerHTML = `<div class="props-error">${escapeHtml(err.message)}</div>`;
     }
+  }
+
+  async function copyGithubItemToLocal(sourceDiskId, destDiskId, item, parentId) {
+    if (item.isFolder || item.mimeType === GithubDisk.FOLDER_MIME) {
+      const folder = await LocalDisk.createFolder(destDiskId, parentId, item.name);
+      const children = await GithubDisk.listFiles(sourceDiskId, item.id);
+      for (const child of children) {
+        await copyGithubItemToLocal(sourceDiskId, destDiskId, child, folder.id);
+      }
+      return folder;
+    }
+    const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
+    const content = await blob.text();
+    return LocalDisk.createFile(destDiskId, parentId, item.name, item.mimeType || 'application/octet-stream', content);
+  }
+
+  async function copyGithubItemToGoogle(sourceDiskId, destToken, item, parentId) {
+    if (item.isFolder || item.mimeType === GithubDisk.FOLDER_MIME) {
+      const folder = await Drive.createFolder(destToken, parentId, item.name);
+      const children = await GithubDisk.listFiles(sourceDiskId, item.id);
+      for (const child of children) {
+        await copyGithubItemToGoogle(sourceDiskId, destToken, child, folder.id);
+      }
+      return folder;
+    }
+    const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
+    if (GithubDisk.isTextFileMime(item.mimeType, item.name)) {
+      const text = await blob.text();
+      return Drive.createFile(destToken, parentId, item.name, item.mimeType || 'text/plain', text);
+    }
+    return Drive.createFileFromBlob(destToken, parentId, item.name, item.mimeType, blob);
+  }
+
+  async function copyGithubItemToGithub(sourceDiskId, destDiskId, item, parentId) {
+    if (item.isFolder || item.mimeType === GithubDisk.FOLDER_MIME) {
+      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
+      const children = await GithubDisk.listFiles(sourceDiskId, item.id);
+      for (const child of children) {
+        await copyGithubItemToGithub(sourceDiskId, destDiskId, child, folder.id);
+      }
+      return folder;
+    }
+    const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
+    return GithubDisk.createFileFromBlob(destDiskId, parentId, item.name, item.mimeType, blob);
   }
 
   async function transferItems(items, sourceUserId, sourceParentId, destUserId, destParentId, mode = 'cut') {
@@ -975,19 +1083,66 @@ const ContextMenu = (() => {
     const sourceGithub = GithubDisk.isGithubId(sourceUserId);
     const destGithub = GithubDisk.isGithubId(destUserId);
 
-    if (sourceGithub || destGithub) {
-      if (crossDrive) {
-        throw new Error('Copy/move between GitHub storage and other drives is not supported yet');
-      }
+    if (sourceGithub && destGithub) {
       for (const item of items) {
-        if (mode === 'copy') {
-          await GithubDisk.copyFile(destUserId, item.id, destParentId);
+        if (crossDrive || mode === 'copy') {
+          if (crossDrive) {
+            await copyGithubItemToGithub(sourceUserId, destUserId, item, destParentId);
+          } else {
+            await GithubDisk.copyFile(destUserId, item.id, destParentId);
+          }
         } else {
           const fromParent = sourceParentId || item.parents?.[0] || item.parentId || GithubDisk.ROOT_ID;
           await GithubDisk.moveFile(destUserId, item.id, fromParent, destParentId);
         }
+        if (mode === 'cut' && crossDrive) {
+          await GithubDisk.deleteFile(sourceUserId, item.id);
+        }
       }
       app.clearTreeCache?.(destUserId);
+      if (mode === 'cut') app.clearTreeCache?.(sourceUserId);
+      await app.refresh();
+      return;
+    }
+
+    if (destGithub && crossDrive) {
+      for (const item of items) {
+        if (sourceLocal) {
+          await copyLocalItemToGithub(sourceUserId, destUserId, item, destParentId);
+        } else if (!sourceGithub) {
+          const sourceToken = await Auth.ensureValidToken(sourceUserId);
+          await copyGoogleItemToGithub(sourceToken, destUserId, item, destParentId);
+        }
+
+        if (mode === 'cut') {
+          if (sourceLocal) {
+            await LocalDisk.deleteFile(sourceUserId, item.id);
+          } else if (!sourceGithub) {
+            const sourceToken = await Auth.ensureValidToken(sourceUserId);
+            await Drive.trashFile(sourceToken, item.id);
+          }
+        }
+      }
+      app.clearTreeCache?.(destUserId);
+      if (mode === 'cut') app.clearTreeCache?.(sourceUserId);
+      await app.refresh();
+      return;
+    }
+
+    if (sourceGithub && crossDrive) {
+      for (const item of items) {
+        if (destLocal) {
+          await copyGithubItemToLocal(sourceUserId, destUserId, item, destParentId);
+        } else if (!destGithub) {
+          const destToken = await Auth.ensureValidToken(destUserId);
+          await copyGithubItemToGoogle(sourceUserId, destToken, item, destParentId);
+        }
+        if (mode === 'cut') {
+          await GithubDisk.deleteFile(sourceUserId, item.id);
+        }
+      }
+      app.clearTreeCache?.(destUserId);
+      app.clearTreeCache?.(sourceUserId);
       await app.refresh();
       return;
     }
@@ -1097,6 +1252,36 @@ const ContextMenu = (() => {
     }
     const content = await LocalDisk.getTextFileContent(sourceDiskId, item.id);
     return Drive.createFile(destToken, parentId, item.name, item.mimeType || 'text/plain', content);
+  }
+
+  async function copyBlobToGithub(destDiskId, parentId, name, mimeType, blob) {
+    return GithubDisk.createFileFromBlob(destDiskId, parentId, name, mimeType, blob);
+  }
+
+  async function copyLocalItemToGithub(sourceDiskId, destDiskId, item, parentId) {
+    if (item.isFolder || item.mimeType === LocalDisk.FOLDER_MIME) {
+      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
+      const children = await LocalDisk.listFiles(sourceDiskId, item.id);
+      for (const child of children) {
+        await copyLocalItemToGithub(sourceDiskId, destDiskId, child, folder.id);
+      }
+      return folder;
+    }
+    const blob = await LocalDisk.downloadFile(sourceDiskId, item.id);
+    return copyBlobToGithub(destDiskId, parentId, item.name, item.mimeType, blob);
+  }
+
+  async function copyGoogleItemToGithub(sourceToken, destDiskId, item, parentId) {
+    if (item.isFolder) {
+      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
+      const children = await Drive.listFiles(sourceToken, item.id);
+      for (const child of children) {
+        await copyGoogleItemToGithub(sourceToken, destDiskId, child, folder.id);
+      }
+      return folder;
+    }
+    const exported = await Drive.getFileBlobForExternalCopy(sourceToken, item.id, item);
+    return copyBlobToGithub(destDiskId, parentId, exported.name, exported.mimeType, exported.blob);
   }
 
   async function createFolder(ctx) {
